@@ -699,7 +699,7 @@ def main():
                         output_line = predictions[example_id] + "\t" + text_ex 
                         writer.write(output_line)
                     else:
-                        output_line = 'NONE' + "\t" + 'max seq lenght exceeded'
+                        output_line = 'NONE' + "\t" + 'max seq length exceeded'
                         writer.write(output_line)
                         logger.warning("Maximum sequence length exceeded: No prediction for '%s'.", line)
                     example_id += 1
