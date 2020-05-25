@@ -692,20 +692,17 @@ def main():
             with open(os.path.join(args.data_dir, "test.tsv"), "r") as f:
                 example_id = 0
                 for line in f:
-                    if line.startswith("-DOCSTART-") or line == "" or line == "\n":
-                        writer.write(line)
-                        if not predictions[example_id]:
-                            example_id += 1
-                    elif predictions[example_id]:
-                        text_ex=""
-                        if len(line.split())>1:
-                            text_ex=line.split()[1]
-                            
-                        output_line = line.split()[0] + "\t" + predictions[example_id] + "\t" + text_ex + "\n"
+                    if predictions[example_id]:
+                        text_ex = ""
+                        if len(line.split()) > 1:
+                            text_ex = line.split('\t')[1]
+                        output_line = predictions[example_id] + "\t" + text_ex 
                         writer.write(output_line)
                     else:
-                        logger.warning("Maximum sequence length exceeded: No prediction for '%s'.", line.split()[0])
-
+                        output_line = 'NONE' + "\t" + 'max seq lenght exceeded'
+                        writer.write(output_line)
+                        logger.warning("Maximum sequence length exceeded: No prediction for '%s'.", line)
+                    example_id += 1
     return results
 
 
