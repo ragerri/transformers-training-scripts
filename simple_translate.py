@@ -16,11 +16,25 @@ def get_label_doc(input_list):
             print('Source file should contain two columns only')
     return output_labels, output_words
 
+def chunk_list(src_list, n):
+    # looping till length l 
+    for i in range(0, len(src_list), n):
+        yield src_list[i:i + n]
+
+def flatten_list(src_list):
+    flattened_list = [item for sublist in src_list for item in sublist]
+    return flattened_list
+
+
 
 def translate(src_lines, model=None, tokenizer=None):
-    translated = model.generate(**tokenizer.prepare_translation_batch(src_lines))
-    tgt_text = [tokenizer.decode(t, skip_special_tokens=True) for t in translated]
-    return tgt_text
+    chunks = list(chunk_list(src_lines, 6))
+    translations = []
+    for i, chunk in enumerate(chunks):
+        translated = model.generate(**tokenizer.prepare_translation_batch(chunk))
+        tgt_text = [tokenizer.decode(t, skip_special_tokens=True) for t in translated]
+        translations.append(tgt_text)
+    return flatten_list(translations)
 
 def write_to_file(output_file, src_labels, translated_words):
     for label, line in zip(src_labels, translated_words):
