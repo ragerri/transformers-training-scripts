@@ -27,8 +27,8 @@ def flatten_list(src_list):
 
 
 
-def translate(src_lines, model=None, tokenizer=None):
-    chunks = list(chunk_list(src_lines, 6))
+def translate(src_lines, no_chunks, model=None, tokenizer=None):
+    chunks = list(chunk_list(src_lines, no_chunks))
     translations = []
     for i, chunk in enumerate(chunks):
         translated = model.generate(**tokenizer.prepare_translation_batch(chunk))
@@ -53,6 +53,7 @@ def main():
                              '(it defaults to UTF-8)')
     parser.add_argument('--src', help='The source language')
     parser.add_argument('--tgt', help='The target language')
+    parser.add_argument('-c, --chunks', help='Number of chunks to divide the corpus')
     args = parser.parse_args()
 
     f = open(args.input, encoding=args.encoding)
@@ -65,7 +66,7 @@ def main():
     with open(args.input, 'r', encoding=args.encoding) as f:
         src_lines = f.readlines()
         labels, words = get_label_doc(src_lines)
-        tgt_text = translate(words, model, tokenizer)
+        tgt_text = translate(words, args.chunks, model, tokenizer)
         write_to_file(output_file, labels, tgt_text)
 
 
