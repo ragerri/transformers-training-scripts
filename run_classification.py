@@ -45,7 +45,7 @@ from transformers import (
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-from utils_classification import convert_examples_to_features 
+from utils_classification import convert_examples_to_features
 from transformers.data.processors.utils import SingleSentenceClassificationProcessor as Processor
 
 
@@ -85,8 +85,6 @@ def get_labels(path):
         return ["pos","neg","neu"]
 
 
-
-        
 def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
     """ Train the model """
     if args.local_rank in [-1, 0]:
@@ -227,7 +225,7 @@ def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
                     if (
                         args.local_rank == -1 and args.evaluate_during_training
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
-                        results, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="dev")
+                        results, _, _ = evaluate(args, model, tokenizer, labels, pad_token_label_id, mode="dev")
                         for key, value in results.items():
                             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
@@ -310,6 +308,7 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
             preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
             out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
 
+    all_preds = preds
     eval_loss = eval_loss / nb_eval_steps
     preds = np.argmax(preds, axis=1)
 
@@ -340,7 +339,7 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
         else:
             logger.info("  %s = %s", key, str(results[key]))
 
-    return results, preds_list
+    return results, preds_list, all_preds
 
 
 def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
@@ -462,6 +461,8 @@ def main():
     parser.add_argument("--do_train", action="store_true", help="Whether to run training.")
     parser.add_argument("--do_eval", action="store_true", help="Whether to run eval on the dev set.")
     parser.add_argument("--do_predict", action="store_true", help="Whether to run predictions on the test set.")
+    parser.add_argument("--get_all_preds", action="store_true",
+                        help="Whether to save the predicted probabilities for each label.")
     parser.add_argument(
         "--evaluate_during_training",
         action="store_true",
@@ -667,7 +668,7 @@ def main():
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             model = AutoModelForSequenceClassification.from_pretrained(checkpoint)
             model.to(args.device)
-            result, _ = evaluate(args, model, tokenizer, label2id, pad_token_label_id, mode="dev", prefix=global_step)
+            result, _, _= evaluate(args, model, tokenizer, label2id, pad_token_label_id, mode="dev", prefix=global_step)
             if global_step:
                 result = {"{}_{}".format(global_step, k): v for k, v in result.items()}
             results.update(result)
@@ -680,7 +681,8 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(args.output_dir, **tokenizer_args)
         model = AutoModelForSequenceClassification.from_pretrained(args.output_dir)
         model.to(args.device)
-        result, predictions = evaluate(args, model, tokenizer, label2id, pad_token_label_id, mode="test")
+        result, predictions, all_preds = evaluate(args, model, tokenizer, label2id, pad_token_label_id, mode="test")
+        #all_preds_list = [np.array2string(item, separator='\t') for item in all_preds]
         # Save results
         output_test_results_file = os.path.join(args.output_dir, "test_results.txt")
         with open(output_test_results_file, "w") as writer:
@@ -696,7 +698,11 @@ def main():
                         text_ex = ""
                         if len(line.split()) > 1:
                             text_ex = line.split('\t')[1]
-                        output_line = predictions[example_id] + "\t" + text_ex 
+                            if args.get_all_preds:
+                                np.savetxt(args.output_dir + '/test_predictions_probabilities.tsv', all_preds, fmt='%f', delimiter='\t')
+                                output_line = predictions[example_id] + "\t" + text_ex
+                            else:
+                                output_line = predictions[example_id] + "\t" + text_ex
                         writer.write(output_line)
                     else:
                         output_line = 'NONE' + "\t" + 'max seq length exceeded'
