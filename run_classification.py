@@ -668,14 +668,36 @@ def main():
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             model = AutoModelForSequenceClassification.from_pretrained(checkpoint)
             model.to(args.device)
-            result, _, _= evaluate(args, model, tokenizer, label2id, pad_token_label_id, mode="dev", prefix=global_step)
+            result, predictions, all_preds = evaluate(args, model, tokenizer, label2id, pad_token_label_id, mode="dev", prefix=global_step)
             if global_step:
                 result = {"{}_{}".format(global_step, k): v for k, v in result.items()}
             results.update(result)
-        output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
+        output_eval_file = os.path.join(args.output_dir, "dev_results.txt")
         with open(output_eval_file, "w") as writer:
             for key in sorted(results.keys()):
                 writer.write("{} = {}\n".format(key, str(results[key])))
+        # Save development predictions
+        output_dev_predictions_file = os.path.join(args.output_dir, "dev_predictions.txt")
+        with open(output_dev_predictions_file, "w") as writer:
+            with open(os.path.join(args.data_dir, "dev.tsv"), "r") as f:
+                example_id = 0
+                for line in f:
+                    if predictions[example_id]:
+                        text_ex = ""
+                        if len(line.split()) > 1:
+                            text_ex = line.split('\t')[1]
+                            if args.get_all_preds:
+                                np.savetxt(args.output_dir + '/dev_predictions_probabilities.tsv', all_preds, fmt='%f', delimiter='\t')
+                                output_line = predictions[example_id] + "\t" + text_ex
+                            else:
+                                output_line = predictions[example_id] + "\t" + text_ex
+                        writer.write(output_line)
+                    else:
+                        output_line = 'NONE' + "\t" + 'max seq length exceeded'
+                        writer.write(output_line)
+                        logger.warning("Maximum sequence length exceeded: No prediction for '%s'.", line)
+                    example_id += 1
+
 
     if args.do_predict and args.local_rank in [-1, 0]:
         tokenizer = AutoTokenizer.from_pretrained(args.output_dir, **tokenizer_args)
@@ -688,7 +710,7 @@ def main():
         with open(output_test_results_file, "w") as writer:
             for key in sorted(result.keys()):
                 writer.write("{} = {}\n".format(key, str(result[key])))
-        # Save predictions
+        # Save test predictions
         output_test_predictions_file = os.path.join(args.output_dir, "test_predictions.txt")
         with open(output_test_predictions_file, "w") as writer:
             with open(os.path.join(args.data_dir, "test.tsv"), "r") as f:
